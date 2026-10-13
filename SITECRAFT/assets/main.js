@@ -89,15 +89,19 @@ function initFAQ(){
     const q = item.querySelector('.faq-q');
     const a = item.querySelector('.faq-a');
     if (!q || !a) return;
+    q.setAttribute('aria-expanded', String(item.classList.contains('open')));
     q.addEventListener('click', () => {
       const isOpen = item.classList.contains('open');
-      document.querySelectorAll('.faq-item.open').forEach(o => {
-        if (o !== item){
-          o.classList.remove('open');
-          o.querySelector('.faq-a').style.maxHeight = null;
-        }
+      document.querySelectorAll('.faq-item.open').forEach(openItem => {
+        if (openItem === item) return;
+        openItem.classList.remove('open');
+        const openQuestion = openItem.querySelector('.faq-q');
+        const openAnswer = openItem.querySelector('.faq-a');
+        if (openQuestion) openQuestion.setAttribute('aria-expanded', 'false');
+        if (openAnswer) openAnswer.style.maxHeight = null;
       });
       item.classList.toggle('open', !isOpen);
+      q.setAttribute('aria-expanded', String(!isOpen));
       a.style.maxHeight = !isOpen ? a.scrollHeight + 'px' : null;
     });
   });
@@ -376,6 +380,11 @@ function initEnquiryModal(){
   const panels = Array.from(root.querySelectorAll('.wizard-panel'));
   const indicator = Array.from(root.querySelectorAll('#wizardIndicator span'));
   const form = document.getElementById('enquiryForm');
+  const formStatus = document.createElement('p');
+  formStatus.className = 'form-status';
+  formStatus.setAttribute('role', 'status');
+  formStatus.setAttribute('aria-live', 'polite');
+  form.appendChild(formStatus);
   const summaryBox = document.getElementById('wzSummary');
   let step = 0;
   let lastFocused = null;
@@ -480,6 +489,8 @@ function initEnquiryModal(){
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+    formStatus.textContent = '';
+    if (!form.reportValidity()) return;
     const data = new FormData(form);
     const message =
 `Hello SiteCraft,
@@ -496,9 +507,20 @@ Message: ${data.get('message') || '-'}
 
 Please share the next steps.`;
 
-    window.open(waLink(message), '_blank', 'noopener');
-    closeModal();
-    form.reset();
+    const whatsappUrl = waLink(message);
+    const whatsappWindow = window.open(whatsappUrl, '_blank');
+    if (whatsappWindow) {
+      whatsappWindow.opener = null;
+      formStatus.textContent = 'Your enquiry is ready in WhatsApp. Review it there and press Send to contact SiteCraft.';
+    } else {
+      formStatus.replaceChildren(document.createTextNode('Your browser blocked the WhatsApp window. '));
+      const fallback = document.createElement('a');
+      fallback.href = whatsappUrl;
+      fallback.target = '_blank';
+      fallback.rel = 'noopener noreferrer';
+      fallback.textContent = 'Open your enquiry in WhatsApp';
+      formStatus.append(fallback, document.createTextNode('.'));
+    }
   });
 }
 
@@ -545,6 +567,30 @@ Message: ${data.get('message') || '-'}`;
   });
 }
 
+function initPackageEstimator(){
+  const range = document.getElementById('sc-product-range');
+  const name = document.getElementById('sc-estimate-name');
+  const price = document.getElementById('sc-estimate-price');
+  const includes = document.getElementById('sc-estimate-includes');
+  const link = document.getElementById('sc-estimate-whatsapp');
+  if (!range || !name || !price || !includes || !link) return;
+  const packages = {
+    basic: {name:'Basic', price:String.fromCharCode(0x20B9) + '3,999', products:'up to 10 product uploads'},
+    standard: {name:'Standard', price:String.fromCharCode(0x20B9) + '8,999', products:'up to 30 product uploads'},
+    premium: {name:'Premium', price:String.fromCharCode(0x20B9) + '11,999', products:'unlimited product uploads'}
+  };
+  function update(){
+    const selected = packages[range.value] || packages.basic;
+    name.textContent = selected.name;
+    price.textContent = selected.price;
+    includes.textContent = 'Includes ' + selected.products + '.';
+    const message = 'Hello SiteCraft, I would like to discuss the ' + selected.name + ' Shopify package (' + selected.price + '). My product range is: ' + range.options[range.selectedIndex].text + '.';
+    link.href = waLink(message);
+  }
+  range.addEventListener('change', update);
+  update();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
   initMobileMenu();
@@ -560,4 +606,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initComingSoonModal();
   initEnquiryModal();
   initContactForm();
+  initPackageEstimator();
 });
